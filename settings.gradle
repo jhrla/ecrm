@@ -1,0 +1,3 @@
+rootProject.name = 'safety'
+include 'app'
+include 'frontend'

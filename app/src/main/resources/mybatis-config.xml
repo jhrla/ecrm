@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE configuration
+  PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-config.dtd">
+
+<configuration>
+    <!-- MyBatis 전역 설정 -->
+    <settings>
+        <!-- 자동 커밋 설정 (기본값: false) -->
+        <setting name="autoMappingBehavior" value="PARTIAL"/>
+        
+        <!-- 필드 이름의 언더스코어를 카멜 케이스로 변환 -->
+        <setting name="mapUnderscoreToCamelCase" value="true"/>
+        
+        <!-- null 값에 대한 JDBC 타입 설정 -->
+        <setting name="jdbcTypeForNull" value="VARCHAR"/>
+
+        <!-- 캐시 사용 여부 (기본값: true) -->
+        <setting name="cacheEnabled" value="false"/>
+    </settings>
+
+    <!-- Alias 설정 (엔티티 클래스의 경로 별칭 설정) -->
+    <typeAliases>
+        <package name="com.ktss.safety.ecrm.domain"/>
+    </typeAliases>
+
+    <!-- 환경 설정 (트랜잭션 관리 및 데이터 소스 설정) -->
+    <environments default="development">
+        <environment id="development">
+            <transactionManager type="JDBC"/>
+            <dataSource type="POOLED">
+                <property name="driver" value="org.mariadb.jdbc.Driver"/>
+                <property name="url" value="jdbc:mariadb://211.233.16.208:33306/ktss_crm"/>
+                <property name="username" value="ktss2402"/>
+                <property name="password" value="solution24@@"/>
+            </dataSource>
+        </environment>
+    </environments>
+
+  
+</configuration>

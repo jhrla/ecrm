@@ -1,0 +1,251 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ktss.safety.ecrm.ec.mapper.dashboard.DashBoardMapper">
+    <sql id="areaData">
+        WITH region_data AS (
+        select
+            er.id as code,
+            er.name,
+            CONCAT('{lat:', er.gps_lat, ', lng:', er.gps_long, '}') as center,
+            ifnull(eci.cnt, 0) as count,
+            er.level
+            <if test="level == 2">
+                , er.parent_id
+            </if>
+        from
+            ecrm_regions er
+        left join (
+            select
+                city_code
+                <if test="level == 2">
+                    , district_code
+                </if>
+                , count(*) as cnt
+            from
+                ecrm_customer_info
+            group by city_code
+            <if test="level == 2">
+                , district_code
+            </if>
+        ) eci on 
+        <if test="level == 1">
+            er.id = eci.city_code
+        </if>
+        <if test="level == 2">
+            er.id = eci.district_code
+        </if>
+        ),
+        total_summary AS (
+        select
+            NULL as code,
+            '전체(합계)' as name,
+            NULL as center,
+            ifnull(sum(count), 0) as count,
+            level
+            <if test="level == 2">
+                , parent_id
+            </if>
+        from
+            region_data
+        group by
+            level
+        )        
+    </sql>
+
+    <sql id="areaDataWhere">
+        select * from total_summary
+        where level = #{level}
+        <if test="level == 2">
+            and parent_id = #{parent_id}
+        </if>
+        UNION ALL
+        select * from region_data
+        where level = #{level}
+        <if test="level == 2">
+            and parent_id = #{parent_id}
+        </if>
+    </sql>
+
+    <select id="getAreaList" resultType="map">
+        <include refid="areaData" />
+        <include refid="areaDataWhere" />
+    </select>
+
+    <select id="getCustomerList" resultType="map">
+        select 
+            client_code ,
+            contract_code ,
+            customer_name ,
+            city_code,
+            district_code,
+            address,
+            gps_position
+        from ecrm_customer_info
+        where district_code = #{parent_id} 
+    </select>
+
+    <select id="getDeviceList" resultType="map">
+        WITH latest_logs AS (
+            SELECT 
+                client_code,
+                contract_code,
+                floor_no,
+                device_id,
+                smoke_density,
+                temp,
+                humidity,
+                co,
+                ROW_NUMBER() OVER (
+                    PARTITION BY client_code, contract_code, floor_no, device_id  -- log_seq 제거
+                    ORDER BY created_at DESC -- 최신 데이터 기준
+                ) AS rn
+            FROM ecrm_device_logs
+        )
+        SELECT 
+            edi.com_id,
+            edi.device_id,
+            edi.device_name,
+            edi.device_type,
+            edi.install_address,
+            edi.floor_no,
+            edi.install_position,
+            ll.smoke_density,
+            ll.temp,
+            ll.humidity,
+            ll.co
+        FROM ecrm_device_info edi
+        LEFT OUTER JOIN latest_logs ll
+        ON edi.client_code = ll.client_code 
+        AND edi.contract_code = ll.contract_code 
+        AND edi.floor_no = ll.floor_no 
+        AND edi.device_id = ll.device_id
+        AND ll.rn = 1 
+        WHERE edi.client_code = #{client_code}
+        AND edi.contract_code = #{contract_code}       
+    </select>
+
+    <select id="getDeviceLogList" resultType="map">
+        SELECT 
+            edi.com_id,
+            edi.device_id,
+            edi.device_name,
+            edi.device_type,
+            edi.install_address,
+            edi.floor_no,
+            edi.install_position,
+            edl.smoke_density ,
+            edl.temp ,
+            edl.humidity ,
+            edl.co 
+        FROM ecrm_device_info edi
+        JOIN ecrm_device_logs edl 
+            ON edi.floor_no = edl.floor_no 
+            AND edi.device_id = edl.device_id
+        WHERE edl.log_seq = (
+            SELECT MAX(log_seq) 
+            FROM ecrm_device_logs 
+            WHERE device_id = edl.device_id)
+         and edi.client_code = #{client_code}
+         and edi.contract_code = #{contract_code}            
+    </select>
+
+     <select id="getFloorList" resultType="map">
+        select 
+            client_code,
+            contract_code,
+            floor_no,
+            floor_name,
+            file_path
+        from ecrm_floor_plan
+        where client_code = #{client_code}
+        and contract_code = #{contract_code}
+        order by floor_no desc        
+    </select>
+
+    <select id="getCustomerInfo" resultType="map">
+        select 
+            eci.client_code,
+            eci.contract_code,
+            eci.customer_name,            
+            eci.address,                  
+            eci.city_code,              
+            eci.district_code,          
+            eci.city_name,
+            eci.district_name,
+            eci.building_type,
+            eci.service_type,           
+            eci.gps_position,           
+            sc.manager_name,
+            IFNULL(concat(sc.fire_tel1,'-',sc.fire_tel2,'-',sc.fire_tel3), '-') as fire_tel,
+            IFNULL(concat(sc.police_tel1,'-',sc.police_tel2,'-',sc.police_tel3), '-') as police_tel,
+            IFNULL(scs.emergency_tel1, '-') as emergency_tel1,
+            IFNULL(scs.emergency_tel2, '-') as emergency_tel2,
+            IFNULL(scs.emergency_tel3, '-') as emergency_tel3,
+            timetodate(sc.contract_date) as contract_date 
+        from ecrm_customer_info eci 
+        join subscribe_contract sc
+          on eci.contract_code = sc.contract_code 
+         and eci.client_code = sc.client_code
+        join subscribe_contract_service scs
+          on eci.contract_code = scs.contract_code
+      where eci.client_code = #{client_code}
+        and eci.contract_code = #{contract_code}               
+    </select>
+    
+    <select id="getDashBoardEventList" resultType="map">
+        SELECT 
+            edel.event_id,
+            DATE_FORMAT(edel.event_time, '%Y-%m-%d %H:%i:%s') AS event_time,
+            edi.client_code,
+            edi.contract_code,
+            eci.customer_name,            
+            edel.event_code,
+            edel.event_name,
+            edel.sub_code,
+            edel.sub_name,
+            edel.event_kind,            
+            edi.floor_no,
+            edi.com_id,
+            edi.device_id,
+            edi.device_name,
+            edel.event_reason,
+            edel.re_cancel,
+            edel.etc_event AS other_event,
+            edel.sms_flag,
+            edel.device_type,            
+            edi.install_address,
+            CONCAT(eci.city_name, ' - ', eci.district_name, ' - ', eci.customer_name, '-', efp.floor_name, '층 - ', edi.install_address) AS event_msg,
+            eci.city_code,
+            eci.district_code,
+            edel.smoke_density,
+            edel.temp,
+            edel.humidity,
+            edel.co,
+            edel.temp_rise
+        FROM ecrm_device_event_logs edel
+        LEFT JOIN ecrm_device_info edi ON (
+            edel.com_id = edi.com_id
+            AND edel.device_id = edi.device_id
+        )
+        LEFT JOIN ecrm_customer_info eci ON (
+            eci.client_code = edi.client_code
+            AND eci.contract_code = edi.contract_code
+        )
+        LEFT JOIN ecrm_floor_plan efp ON (
+            edi.client_code = efp.client_code 
+            AND edi.contract_code = efp.contract_code 
+            AND edi.floor_no = efp.floor_no
+        )
+        WHERE edel.recover_time IS NULL
+        AND edel.event_kind IN (1, 2)
+        AND edel.event_time between NOW() - INTERVAL 1 DAY and now()
+    </select>
+
+    <update id="sendConfirmRequest" parameterType="map">
+        update ecrm_device_event_logs
+        set recover_action_time = now()
+        where event_id = #{event_id}
+          and recover_action_time is null
+    </update>
+
+</mapper>

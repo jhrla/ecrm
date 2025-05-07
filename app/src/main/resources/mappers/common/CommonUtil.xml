@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ktss.safety.ecrm.common.mapper.CommonUtilMapper"> 
+    <select id="getResionList" resultType="map">
+        SELECT id, name from ecrm_regions
+        <where>
+            <choose>
+                <when test="level == 1">
+                    AND level = 1
+                </when>
+                <otherwise>
+                    <if test="parent_id">
+                        AND parent_id = #{parent_id}
+                    </if>
+                </otherwise>
+            </choose>
+        </where>
+    </select>
+
+    <select id="getServiceType" resultType="map">
+        SELECT detail_code as code, detail_name as name from common_code
+        where 
+           category_code = 'SCC'
+    </select>
+
+    <select id="getBuildingType" resultType="map">
+        SELECT detail_code, detail_name from common_code
+        where 
+           category_code = 'SBT'
+    </select>
+
+</mapper>

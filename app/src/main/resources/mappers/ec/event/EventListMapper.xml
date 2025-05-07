@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ktss.safety.ecrm.ec.mapper.event.EventListMapper">
+    <sql id="commonEventData">
+        SELECT 
+            (select detail_name from common_code where category_code = 'SCC' and detail_code = service_type) as service_type,	
+            edel.event_kind,
+            eci.contract_code,		
+            eci.customer_name,            
+            CONCAT(eci.city_name, ' - ', eci.district_name, ' - ', eci.customer_name, '-', edi.floor_no, '층 - ', edi.install_address) AS event_msg,
+            edi.device_id,
+            edi.device_name,	
+            edel.event_id,
+            date_format(edel.event_time, '%Y-%m-%d %H:%i:%s') as event_time,
+            edel.event_name,
+            date_format(edel.recover_time, '%Y-%m-%d %H:%i:%s') as recover_time,
+            date_format(edel.sms_send_time, '%Y-%m-%d %H:%i:%s') as sms_send_time,
+            date_format(edel.recover_action_time, '%Y-%m-%d %H:%i:%s') as recover_action_time
+        FROM ecrm_customer_info eci
+        JOIN ecrm_device_info edi
+            ON eci.client_code = edi.client_code 
+            AND eci.contract_code = edi.contract_code
+        JOIN ecrm_device_event_logs edel
+            ON edi.com_id = edel.com_id 
+            AND edi.device_id = edel.device_id
+            AND edi.device_type = edel.device_type        
+    </sql>
+
+    <sql id="commonWhere">
+        <where>           
+            <choose>
+                <when test="event_kind != ''">
+                    and edel.event_kind = #{event_kind}
+                </when>
+                <otherwise>
+                    and edel.event_kind in (1, 2)
+                </otherwise>
+            </choose>
+            <if test="contract_code != ''">
+                AND eci.contract_code like '%${contract_code}%'
+            </if>
+            <if test="customer_name != ''">
+                AND eci.customer_name like '%${customer_name}%'
+            </if>
+            <if test="region !=''">
+                AND eci.city_code = #{region}
+            </if>
+            <if test="sub_region !=''">
+                AND eci.sub_region = #{sub_region}
+            </if>
+            <if test="device_type !=''">
+                AND edi.device_type = #{device_type}
+            </if>
+            <if test="event_from_date != '' and event_to_date != ''">
+                AND date(edel.event_time) between #{event_from_date} and #{event_to_date}
+            </if>
+        </where>
+    </sql>
+
+    <select id="getEventList" resultType="map">
+        <include refid="commonEventData" />
+        <include refid="commonWhere" />
+        ORDER BY edel.event_time DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <select id="getEventListCount" resultType="int">
+        SELECT count(*) FROM (
+           <include refid="commonEventData" />
+           <include refid="commonWhere" />
+        ) as cnt
+    </select>
+
+    <sql id="commonEventDataExcel">
+        SELECT 
+            (select detail_name from common_code where category_code = 'SCC' and detail_code = service_type) as service_type,
+            CASE 
+                WHEN edel.event_kind = 1 THEN '경보'
+                WHEN edel.event_kind = 2 THEN '주의보'                
+            END AS event_kind,
+            eci.contract_code,		
+            eci.customer_name,            
+            CONCAT(eci.city_name, ' - ', eci.district_name, ' - ', eci.customer_name, '-', edi.floor_no, '층 - ', edi.install_address) AS event_msg,
+            edi.device_id,
+            edi.device_name,	
+            edel.event_id,
+            date_format(edel.event_time, '%Y-%m-%d %H:%i:%s') as event_time,
+            edel.event_name,
+            date_format(edel.recover_time, '%Y-%m-%d %H:%i:%s') as recover_time,
+            date_format(edel.sms_send_time, '%Y-%m-%d %H:%i:%s') as sms_send_time,
+            date_format(edel.recover_action_time, '%Y-%m-%d %H:%i:%s') as recover_action_time
+        FROM ecrm_customer_info eci
+        JOIN ecrm_device_info edi
+            ON eci.client_code = edi.client_code 
+            AND eci.contract_code = edi.contract_code
+        JOIN ecrm_device_event_logs edel
+            ON edi.com_id = edel.com_id 
+            AND edi.device_id = edel.device_id
+            AND edi.device_type = edel.device_type        
+    </sql>
+
+    <select id="getEventListExcel" resultType="map">
+        <include refid="commonEventDataExcel" />
+        <include refid="commonWhere" />
+        ORDER BY edel.event_time DESC
+    </select>
+</mapper>

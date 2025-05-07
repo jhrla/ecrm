@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ktss.safety.ecrm.rm.mapper.statistics.StatisticsMapper">
+    <sql id="commonPeriodicReportData">
+        SELECT 
+            eci.contract_code,
+            eci.city_name,
+            eci.customer_name,
+            (select detail_name from common_code where category_code = 'SBT' and detail_code = eci.building_type) building_type,
+            edi.device_name,
+            edi.install_address,
+            edi.device_id,      
+            DATE_FORMAT(edl.created_at, '%Y-%m-%d %H:%i:%s') AS event_time,   
+            edl.log_seq,
+            IF(edl.temp = 0, '-', edl.temp) AS temp,
+            IF(edl.smoke_density = 0, '-', edl.smoke_density) AS smoke_density,
+            IF(edl.humidity = 0, '-', edl.humidity) AS humidity,
+            IF(edl.co = 0, '-', edl.co) AS co,
+            IF(edl.fire_event = 0, '-', '화재경보') AS fire_event
+        FROM  ecrm_device_logs edl           
+        join ecrm_customer_info eci 
+         ON edl.client_code = eci.client_code 
+           and edl.contract_code = eci.contract_code                        
+        JOIN ecrm_device_info edi
+            ON eci.contract_code = edi.contract_code 
+            AND eci.client_code = edi.client_code
+            and edi.device_id = edl.device_id         
+    </sql>
+
+    <sql id="commonWhere">
+        <where>
+            <if test="contract_code != ''">
+                AND eci.contract_code like concat('%', #{contract_code}, '%')
+            </if>
+            <if test="customer_name != ''">
+                AND eci.customer_name like concat('%', #{customer_name}, '%')
+            </if>
+            <if test="region !=''">
+                AND eci.city_code = #{region}
+            </if>
+            <if test="sub_region !=''">
+                AND eci.sub_region = #{sub_region}
+            </if>
+            <if test="device_type !=''">
+                AND edi.device_type = #{device_type}
+            </if>
+            <if test="device_id !=''">
+                AND edi.device_id = #{device_id}
+            </if>
+            <if test="statistics_from_date != '' and statistics_to_date != ''">
+                AND date(edl.created_at) between #{statistics_from_date} and #{statistics_to_date}
+            </if>
+        </where>
+    </sql>
+
+    <select id="getPeriodicReport" resultType="map">
+        <include refid="commonPeriodicReportData" />
+        <include refid="commonWhere" />
+        ORDER BY edl.created_at DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+
+    <select id="getPeriodicReportCount" resultType="int">
+        SELECT COUNT(*)
+        FROM (
+            <include refid="commonPeriodicReportData" />
+            <include refid="commonWhere" />
+        ) AS cnt
+    </select>
+
+    <sql id="commonPeriodicReportExcelData">
+        SELECT 
+            eci.contract_code,
+            eci.city_name,
+            eci.customer_name,
+            (select detail_name from common_code where category_code = 'SBT' and detail_code = eci.building_type) building_type,
+            edi.device_name,
+            edi.install_address,
+            edi.device_id,      
+            DATE_FORMAT(edl.created_at, '%Y-%m-%d %H:%i:%s') AS event_time,   
+            edl.log_seq,
+            IF(edl.temp = 0, '-', edl.temp) AS temp,
+            IF(edl.smoke_density = 0, '-', edl.smoke_density) AS smoke_density,
+            IF(edl.humidity = 0, '-', edl.humidity) AS humidity,
+            IF(edl.co = 0, '-', edl.co) AS co,
+            IF(edl.fire_event = 0, '-', '화재경보') AS fire_event
+        FROM  ecrm_device_logs edl           
+        join ecrm_customer_info eci 
+         ON edl.client_code = eci.client_code 
+           and edl.contract_code = eci.contract_code                        
+        JOIN ecrm_device_info edi
+            ON eci.contract_code = edi.contract_code 
+            AND eci.client_code = edi.client_code
+            and edi.device_id = edl.device_id                
+    </sql>
+
+     <select id="getPeriodicReportExcel" resultType="map">
+        <include refid="commonPeriodicReportExcelData" />
+        <include refid="commonWhere" />
+        ORDER BY edl.created_at DESC
+    </select>
+
+</mapper>

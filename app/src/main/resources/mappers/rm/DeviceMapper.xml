@@ -1,0 +1,293 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ktss.safety.ecrm.rm.mapper.device.DeviceMapper">
+
+    <sql id="commonFloorInfoData">
+        select 
+            contract_code,
+            client_code,
+            customer_name,
+            city_code,
+	        city_name,	        
+            district_code,
+	        district_name,
+            (select detail_name from common_code where category_code = 'SBT' and detail_code = building_type) building_type,
+            address ,
+            (select detail_name from common_code where category_code = 'SCC' and detail_code = service_type) service_type,
+            date_format(contract_date, '%Y-%m-%d') as contract_date,
+            contract_qty
+        from
+            ecrm_customer_info        
+    </sql>
+
+    <sql id="commonFloorInfoDataWhere">
+        <where>
+            <if test="contract_code != ''">
+                AND contract_code like CONCAT('%', #{contract_code}, '%')
+            </if>
+            <if test="region != ''">
+                AND city_code = #{region}
+            </if>
+            <if test="sub_region !=''">
+                AND district_code = #{sub_region}
+            </if>
+            <if test="customer_name !=''">
+                AND customer_name like CONCAT('%', #{customer_name}, '%')
+            </if>
+            <if test="contract_from_date != '' and contract_to_date != ''">
+                AND contract_date between #{contract_from_date} and #{contract_to_date}
+            </if>
+            <if test="service_type != ''">
+                AND service_type = #{service_type}
+            </if>
+        </where>
+    </sql>
+
+    <select id="getFloorInfoList" resultType="map">
+        <include refid="commonFloorInfoData" />
+        <include refid="commonFloorInfoDataWhere" />
+        ORDER BY contract_date DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <select id="getFloorInfoListCount" resultType="int">
+        SELECT count(*) FROM (
+            <include refid="commonFloorInfoData" />
+            <include refid="commonFloorInfoDataWhere" />
+        ) as cnt
+    </select>
+
+    <select id="getFloorFileList" resultType="map">
+        select
+            client_code,
+            contract_code,
+            floor_no,
+            floor_name,
+            file_path,
+            'true' as fromDB
+         from
+            ecrm_floor_plan
+        where 
+            client_code = #{client_code}
+        and contract_code = #{contract_code}
+    </select>
+
+    <select id="getDeviceInfo" resultType="map">
+        select
+            client_code, 
+            contract_code, 
+            floor_no,
+            device_id, 
+            com_id, 
+            device_type, 
+            device_name, 
+            parent_device_id, 
+            install_address, 
+            install_floor, 
+            date_format(install_date, '%Y-%m-%d') as install_date
+         from
+            ecrm_device_info
+        where 
+            client_code = #{client_code}
+        and contract_code = #{contract_code}
+        order by device_id
+    </select>
+
+    <insert id="setDeviceInfo" parameterType="map">
+        insert into ecrm_device_info(
+            client_code, 
+            contract_code, 
+            floor_no,
+            device_id, 
+            com_id, 
+            device_type, 
+            device_name,
+            parent_device_id, 
+            install_address, 
+            install_date,
+            update_time
+        ) VALUES (
+            #{client_code}, 
+            #{contract_code}, 
+            #{floor_no}, 
+            #{device_id}, 
+            #{com_id}, 
+            #{device_type}, 
+            #{device_name}, 
+            #{parent_device_id}, 
+            #{install_address}, 
+            #{install_date},
+            NOW()
+        ) ON DUPLICATE KEY UPDATE 
+            floor_no = #{floor_no},
+            device_type = #{device_type},
+            device_name = #{device_name},
+            install_address = #{install_address},
+            update_time = NOW()
+    </insert>
+
+    <insert id="setFloorUpload" parameterType="map">
+        INSERT INTO ecrm_floor_plan(
+            client_code,
+            contract_code,
+            floor_no,
+            floor_name,
+            file_path
+        ) VALUES (
+            #{client_code},
+            #{contract_code},
+            #{floor_no},
+            #{floor_name},
+            #{file_path}
+        ) ON DUPLICATE KEY UPDATE
+            floor_no = #{floor_no},
+            floor_name = #{floor_name},
+            file_path = #{file_path}
+    </insert>
+
+    <update id="updateFloorInfo" parameterType="map">
+        UPDATE ecrm_floor_plan
+            SET floor_name = #{floor_name}
+                <if test="file_path != null">, file_path = #{file_path}</if>
+        WHERE contract_code = #{contract_code}
+          AND client_code = #{client_code}
+          AND floor_no = #{floor_no}
+    </update>
+
+    <select id="getFloorFileInfo" parameterType="map" resultType="map">
+        SELECT *
+        FROM ecrm_floor_plan
+        WHERE contract_code = #{contract_code}
+        AND client_code = #{client_code}
+        AND floor_no = #{floor_no}
+    </select>
+
+    <delete id="deleteDeviceLogs" parameterType="map">
+        DELETE FROM ecrm_device_logs
+        WHERE client_code = #{client_code}
+          AND contract_code = #{contract_code}
+          AND floor_no = #{floor_no}          
+    </delete>
+
+    <delete id="deleteFloorDevices" parameterType="map">
+        DELETE FROM ecrm_device_info 
+        WHERE client_code = #{client_code}
+          AND contract_code = #{contract_code}
+          AND floor_no = #{floor_no}
+    </delete>
+
+    <delete id="deleteFloorInfo" parameterType="map">
+        DELETE FROM ecrm_floor_plan
+         where 
+            client_code = #{client_code}
+          and contract_code = #{contract_code}
+          and floor_no = #{floor_no}   
+    </delete>
+
+    <delete id="deleteEventLogs" parameterType="map">
+        DELETE FROM ecrm_device_event_logs 
+        WHERE client_code = #{client_code}
+          AND contract_code = #{contract_code}
+          AND floor_no = #{floor_no}
+    </delete>
+
+    <update id="setDeviceQty" parameterType="map">
+        update ecrm_customer_info set
+          contract_qty = #{contract_qty}
+        where contract_code = #{contract_code}
+          and client_code = #{client_code}
+    </update>
+
+    <select id="getFloorList" resultType="map">
+        select floor_no, floor_name,file_path from ecrm_floor_plan
+         where contract_code = #{contract_code}
+           and client_code = #{client_code}
+        order by floor_no desc
+    </select>
+
+    <select id="getFloorDeviceList" resultType="map">
+        select 
+            client_code,
+            contract_code,
+            floor_no,
+            device_id,
+            com_id,
+            device_type,
+            device_name,
+            install_address,
+            date_format(install_date, '%Y-%m-%d') as install_date,
+            IFNULL(install_position, '') AS install_position
+         from ecrm_device_info
+        where contract_code = #{contract_code}
+           and client_code = #{client_code}
+         order by floor_no desc,device_id ASC
+    </select>
+
+    <update id="setDevicePosition" parameterType="map">
+        update ecrm_device_info set
+          install_position = #{install_position}
+        where contract_code = #{contract_code}
+          and client_code = #{client_code}
+          and floor_no = #{floor_no}
+          and device_id = #{device_id}
+    </update>
+
+    <sql id="commonDeviceData">
+       select 
+            eci.contract_code ,
+            cli.client_name as customer_name,
+            cli.ceo_name ,
+            (select detail_name from common_code where category_code = 'SBT' and detail_code = eci.building_type) building_type,
+            edi.device_name ,
+            edi.com_id ,
+            edi.device_id ,
+            edi.device_type ,
+            date_format(edi.install_date, '%Y-%m-%d') as install_date,
+            edi.install_address ,
+            CASE 
+                WHEN edi.use_yn = 1 THEN '사용'
+                WHEN edi.use_yn = 0 THEN '미사용'
+            END AS use_status
+        from client cli
+        join ecrm_customer_info eci
+        on cli.client_code = eci.client_code 
+        join ecrm_device_info edi 
+        on eci.client_code = edi.client_code 
+        and eci.contract_code = edi.contract_code     
+    </sql>
+
+    <sql id="commonDeviceDataWhere">
+        <where>
+            <if test="contract_code != ''">
+                AND eci.contract_code like CONCAT('%', #{contract_code}, '%')
+            </if>
+            <if test="region != ''">
+                AND eci.city_code = #{region}
+            </if>
+            <if test="sub_region !=''">
+                AND eci.district_code = #{sub_region}
+            </if>
+            <if test="customer_name !=''">
+                AND cli.client_name like CONCAT('%', #{customer_name}, '%')
+            </if>
+            <if test="installation_from_date != '' and installation_to_date != ''">
+                AND edi.install_date between #{installation_from_date} and #{installation_to_date}
+            </if>
+        </where>
+    </sql>
+
+    <select id="getDevicesList" resultType="map">
+        <include refid="commonDeviceData" />
+        <include refid="commonDeviceDataWhere" />
+        ORDER BY edi.install_date DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <select id="getDevicesListCount" resultType="int">
+        SELECT count(*) FROM (
+            <include refid="commonDeviceData" />
+            <include refid="commonDeviceDataWhere" />
+        ) as cnt
+    </select>
+
+</mapper>

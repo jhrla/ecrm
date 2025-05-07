@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ktss.safety.ecrm.ec.mapper.dashboard.DeviceEventMapper">
+    <select id="getEvenvDetailInfo" resultType="map">
+        WITH ranked_events AS (
+            SELECT
+                com_id,
+                device_id,
+                event_time,
+                event_id,
+                event_kind,
+                recover_time,
+                ROW_NUMBER() OVER (
+                    PARTITION BY com_id, device_id, event_kind
+                    ORDER BY event_id DESC
+                ) AS rank
+            FROM ecrm_device_event_logs
+        )
+        SELECT
+            eci.client_code,
+            eci.contract_code,
+            eci.customer_name,
+            CONCAT(eci.city_name, ' - ', eci.district_name, ' - ', eci.customer_name, '-', efp.floor_name, '층 - ', edi.install_address) AS event_msg,
+            edi.device_name,
+            eci.city_code,
+            eci.district_code,
+            edi.floor_no,
+            edi.com_id,
+            edi.device_id,
+            edi.device_name,
+            edi.install_address,
+            re.event_time,
+            re.event_id
+        FROM ecrm_device_info edi
+        JOIN ecrm_customer_info eci
+            ON edi.client_code = eci.client_code
+        AND edi.contract_code = eci.contract_code
+        JOIN ecrm_floor_plan efp
+            ON edi.client_code = efp.client_code
+        AND edi.contract_code = efp.contract_code
+        AND edi.floor_no = efp.floor_no
+        JOIN ranked_events re
+            ON edi.com_id = re.com_id
+        AND edi.device_id = re.device_id
+        WHERE re.rank = 1
+         and edi.com_id = #{com_id}
+         and edi.device_id = #{device_id}
+        <choose>
+            <when test="event_kind == 3">
+                and re.event_kind = '1'
+                AND re.recover_time IS NULL
+            </when>
+            <when test="event_kind == 4">
+                and re.event_kind = '2'
+                AND re.recover_time IS NULL
+            </when>
+            <otherwise>
+                and re.event_kind = #{event_kind}
+                AND re.recover_time IS NULL
+            </otherwise>
+        </choose>
+    </select>
+
+    <select id="getDupEventData" resultType="int">
+        SELECT
+            count(*)
+        FROM ecrm_device_event_logs
+        WHERE com_id = #{com_id}
+        AND device_id = #{device_id}
+        <choose>
+            <when test="event_kind == 3">
+                and event_kind = '1'
+                AND recover_time IS NULL
+            </when>
+            <when test="event_kind == 4">
+                and event_kind = '2'
+                AND recover_time IS NULL
+            </when>
+            <otherwise>
+                and event_kind = #{event_kind}
+                AND recover_time IS NULL
+            </otherwise>
+        </choose>
+    </select>
+
+    <insert id="setEvenvDetailInfo" parameterType="map">
+        INSERT INTO ecrm_device_event_logs(
+            event_id,
+            contract_code,
+            client_code,
+            floor_no,
+            com_id,
+            device_id,
+            event_time,
+            event_code,
+            event_name,
+            sub_code,
+            sub_name,
+            event_kind,
+            event_error,
+            re_cancel,
+            etc_event,
+            sms_flag,
+            device_type,
+            event_reason,
+            recover_time,
+            smoke_density,
+            temp,
+            humidity,
+            co,
+            temp_rise
+        ) VALUES (
+            #{event_id},
+            #{contract_code},
+            #{client_code},
+            #{floor_no},
+            #{com_id},
+            #{device_id},
+            #{event_time},
+            #{event_code},
+            #{event_name},
+            #{sub_code},
+            #{sub_name},
+            #{event_kind},
+            #{event_error},
+            #{re_cancel},
+            #{other_event},
+            #{sms_flag},
+            #{device_type},
+            #{event_reason},
+            #{recover_time},
+            #{smoke_density},
+            #{temp},
+            #{humidity},
+            #{co},
+            #{temp_rise}
+        )
+    </insert>
+
+    <select id="maxLogSeq" resultType="int">
+        SELECT COALESCE(MAX(log_seq)+1, 0) AS max_seq
+        FROM ecrm_device_logs
+            WHERE client_code = #{client_code}
+            AND contract_code = #{contract_code}
+            AND floor_no = #{floor_no}
+            AND device_id = #{device_id}
+            FOR UPDATE
+    </select>
+
+    <insert id="setDeviceStatusData" parameterType="map">
+        INSERT INTO ktss_crm.ecrm_device_logs(
+            client_code,
+            contract_code,
+            floor_no,
+            device_id,
+            device_type,
+            fire_event,
+            log_seq,
+            smoke_density,
+            temp,
+            humidity,
+            co,
+            temp_rise
+        ) VALUES (
+            #{client_code},
+            #{contract_code},
+            #{floor_no},
+            #{device_id},
+            #{device_type},
+            #{fire_status},
+            #{log_seq},
+            #{smoke_density},
+            #{temp},
+            #{humidity},
+            #{co},
+            #{temp_rise}
+        )
+    </insert>
+
+    <update id="updateEvenvDetailInfo" parameterType="map">
+        UPDATE ecrm_device_event_logs
+        SET recover_time = now()
+        WHERE event_id = #{event_id}
+        and recover_time is null
+    </update>
+
+    <update id="updateForceRecover" parameterType="map">
+        UPDATE ecrm_device_event_logs
+        SET recover_time = now()
+        WHERE client_code = #{client_code}
+          and event_kind IN (1, 2)
+          and recover_time is null
+    </update>
+
+    <select id="getDeviceInfo" resultType="map">
+        SELECT
+            client_code,
+            contract_code,
+            floor_no,
+            device_id,
+            com_id,
+            device_type
+        FROM ecrm_device_info
+        WHERE com_id = #{com_id}
+        and device_id = #{device_id}
+    </select>
+
+    <update id="sendSmsRequestTime" parameterType="map">
+        update ecrm_device_event_logs
+        set sms_send_time = now()
+        where event_id = #{event_id}
+    </update>
+
+</mapper>

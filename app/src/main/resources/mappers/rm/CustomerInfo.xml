@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ktss.safety.ecrm.rm.mapper.customer.CustomerMapper">
+    <sql id="commonCustomerData">
+        SELECT 
+            subc.contract_code,	
+            cli.client_code,
+            cli.client_name,
+            cli.ceo_name,            
+            (select id from ecrm_regions where name = SUBSTRING_INDEX(subs.service_address, ' ', 1) and LENGTH(id) = 2) as region_code,
+	        SUBSTRING_INDEX(subs.service_address, ' ', 1) AS region,
+	        (select id from ecrm_regions where 
+                parent_id = (select id from ecrm_regions where name = SUBSTRING_INDEX(subs.service_address, ' ', 1) and LENGTH(id) = 2)
+		        and name = SUBSTRING_INDEX(SUBSTRING_INDEX(subs.service_address, ' ', 2), ' ', -1) and LENGTH(id) = 5) as sub_region_code,
+	        SUBSTRING_INDEX(SUBSTRING_INDEX(subs.service_address, ' ', 2), ' ', -1) AS sub_region,
+            timetodate(subc.contract_date) AS contract_date,
+            subs.service_address,
+            subc.manager_name,	    
+            CONCAT(subc.manager_tel1, '-', subc.manager_tel2, '-', subc.manager_tel3) AS manager_tel,
+            CONCAT(subc.fire_tel1, '-', subc.fire_tel2, '-', subc.fire_tel3) AS fire_tel,
+            CONCAT(subc.police_tel1, '-', subc.police_tel2, '-', subc.police_tel3) AS police_tel,
+            subs.building_type,
+            subp.service_type,
+            ecinfo.gps_position    
+        FROM 
+            client cli
+        JOIN 
+            subscribe_contract subc ON cli.client_code = subc.client_code
+        JOIN 
+            subscribe_contract_service subs ON subc.contract_code = subs.contract_code
+        JOIN 
+            (SELECT 
+                    contract_code,
+                    service_type,
+                    SUM(amount) AS device_qty
+                FROM subscribe_contract_procurement
+                WHERE procurement_type = '0'
+                GROUP BY contract_code, service_type
+            ) subp ON subc.contract_code = subp.contract_code
+        LEFT JOIN 
+            ecrm_customer_info ecinfo ON subc.contract_code = ecinfo.contract_code
+                AND subc.client_code = ecinfo.client_code
+    </sql>
+
+    <sql id="commonWhere">
+        <where>
+            <if test="customer_name != ''">
+                AND cli.client_name like CONCAT('%', #{customer_name}, '%')
+            </if>
+            <if test="contract_code != ''">
+                AND subc.contract_code like CONCAT('%', #{contract_code}, '%')
+            </if>
+            <if test="region != ''">
+                AND ecinfo.city_code = #{region}
+            </if>
+            <if test="sub_region !=''">
+                AND ecinfo.district_code = #{sub_region}
+            </if>
+            <if test="contract_from_date != '' and contract_to_date != ''">
+                AND subc.contract_date between datetotime(#{contract_from_date}) and datetotime(#{contract_to_date})
+            </if>
+        </where>
+    </sql>
+
+    <select id="getCustomerList" resultType="map">
+        <include refid="commonCustomerData" />
+        <include refid="commonWhere" />
+        ORDER BY subc.contract_date DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <select id="getCustomerListCount" resultType="int">
+        SELECT count(*) FROM (
+           <include refid="commonCustomerData" />
+           <include refid="commonWhere" />
+        ) as cnt
+    </select>
+
+    <sql id="commonExcelData">
+        SELECT 
+            subc.contract_code,	
+	        SUBSTRING_INDEX(subs.service_address, ' ', 1) AS region,	        
+	        SUBSTRING_INDEX(SUBSTRING_INDEX(subs.service_address, ' ', 2), ' ', -1) AS sub_region,
+            client_name,
+            ceo_name,         
+            timetodate(subc.contract_date) AS contract_date,
+            subs.service_address as address,
+            subc.manager_name,
+            CONCAT(subc.manager_tel1, '-', subc.manager_tel2, '-', subc.manager_tel3) AS manager_tel,
+            CONCAT(subc.fire_tel1, '-', subc.fire_tel2, '-', subc.fire_tel3) AS fire_tel,
+            CONCAT(subc.police_tel1, '-', subc.police_tel2, '-', subc.police_tel3) AS police_tel,
+            subs.building_type
+        FROM 
+            client cli
+        JOIN 
+            subscribe_contract subc ON cli.client_code = subc.client_code
+        JOIN 
+            subscribe_contract_service subs ON subc.contract_code = subs.contract_code        
+        LEFT JOIN 
+            ecrm_customer_info ecinfo ON subc.contract_code = ecinfo.contract_code
+                AND subc.client_code = ecinfo.client_code
+    </sql>
+
+    <select id="getCustomerExcel" resultType="map">
+        <include refid="commonExcelData" />
+        <include refid="commonWhere" />
+    </select>
+
+    <insert id="setTransferCustomer" parameterType="map">
+        INSERT INTO ecrm_customer_info(
+            client_code,
+            contract_code,
+            customer_name,
+            contract_date,
+            city_code,
+            city_name,
+            district_code,
+            district_name,
+            address,
+            building_type,
+            service_type,
+            contract_qty,
+            gps_position
+        )VALUES(
+            #{client_code},
+            #{contract_code},
+            #{client_name},
+            #{contract_date},
+            #{region_code},
+            #{region},
+            #{sub_region_code},
+            #{sub_region},
+            #{service_address},
+            #{building_type},
+            #{service_type},
+            #{device_qty},
+            #{gps_position}
+        ) ON DUPLICATE KEY UPDATE
+            customer_name = #{client_name},
+            contract_date = #{contract_date},
+            city_code = #{region_code},
+            city_name = #{region},
+            district_code = #{sub_region_code},
+            district_name = #{sub_region},
+            address = #{service_address},
+            building_type = #{building_type},
+            service_type = #{service_type},
+            contract_qty = #{device_qty},
+            gps_position = #{gps_position}
+    </insert>
+
+    <delete id="deleteTransferCustomer" parameterType="map">
+        DELETE eci, ecfp, edi, edl, edel
+        FROM ecrm_customer_info eci
+        LEFT JOIN ecrm_floor_plan ecfp
+          ON eci.contract_code = ecfp.contract_code 
+        AND eci.client_code = ecfp.client_code
+        LEFT JOIN ecrm_device_info edi 
+          ON eci.contract_code = edi.contract_code 
+        AND eci.client_code = edi.client_code
+        LEFT JOIN ecrm_device_logs edl 
+          ON eci.contract_code = edl.contract_code 
+        AND eci.client_code = edl.client_code       
+        LEFT JOIN ecrm_device_event_logs edel 
+          ON edi.contract_code = edel.contract_code 
+        AND edi.client_code = edel.client_code
+        WHERE eci.contract_code = #{contract_code}
+           and eci.client_code = #{client_code}           
+    </delete>
+
+</mapper>

@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ktss.safety.ecrm.ec.mapper.fault.FaultListMapper">
+    <sql id="commonFaultData">
+         SELECT 
+            (select detail_name from common_code where category_code = 'SCC' and detail_code = service_type) as service_type,
+            edel.event_kind,
+            eci.contract_code,		
+            eci.customer_name,            
+            CONCAT(eci.city_name, ' - ', eci.district_name, ' - ', eci.customer_name, '-', edi.floor_no, '층 - ', edi.install_address) AS event_msg,
+            edi.device_id,
+            edi.device_name,	
+            edel.event_id,
+            date_format(edel.event_time, '%Y-%m-%d %H:%i:%s') as event_time,
+            edel.event_name,
+            date_format(edel.recover_time, '%Y-%m-%d %H:%i:%s') as recover_time,
+            date_format(edel.sms_send_time, '%Y-%m-%d %H:%i:%s') as sms_send_time,
+            date_format(edel.recover_action_time, '%Y-%m-%d %H:%i:%s') as recover_action_time
+        FROM ecrm_customer_info eci
+        JOIN ecrm_device_info edi
+            ON eci.client_code = edi.client_code 
+            AND eci.contract_code = edi.contract_code
+        JOIN ecrm_device_event_logs edel
+            ON edi.com_id = edel.com_id 
+            AND edi.device_id = edel.device_id
+            AND edi.device_type = edel.device_type
+    </sql>
+
+    <sql id="commonWhere">
+        <where>
+            edel.event_error = 1      
+            <if test="contract_code != ''">
+                AND eci.contract_code like '%${contract_code}%'
+            </if>
+            <if test="customer_name != ''">
+                AND eci.customer_name like '%${customer_name}%'
+            </if>
+            <if test="region !=''">
+                AND eci.city_code = #{region}
+            </if>
+            <if test="sub_region !=''">
+                AND eci.sub_region = #{sub_region}
+            </if>
+            <if test="device_type !=''">
+                AND edi.device_type = #{device_type}
+            </if>
+            <if test="fault_from_date != '' and fault_to_date != ''">
+                AND date(edel.event_time) between #{fault_from_date} and #{fault_to_date}
+            </if>
+        </where>
+    </sql>
+
+    <select id="getFaultList" resultType="map">
+        <include refid="commonFaultData" />
+        <include refid="commonWhere" />
+        ORDER BY edel.event_time DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <select id="getFaultListCount" resultType="int">
+        SELECT count(*) FROM (
+           <include refid="commonFaultData" />
+           <include refid="commonWhere" />
+        ) as cnt
+    </select>
+
+    <sql id="commonFaultExcelData">
+        SELECT 
+            (select detail_name from common_code where category_code = 'SCC' and detail_code = service_type) as service_type,           
+            eci.contract_code,		
+            eci.customer_name,            
+            CONCAT(eci.city_name, ' - ', eci.district_name, ' - ', eci.customer_name, '-', edi.floor_no, '층 - ', edi.install_address) AS event_msg,
+            edi.device_name,	
+            edi.device_id,
+            date_format(edel.event_time, '%Y-%m-%d %H:%i:%s') as event_time,
+            edel.event_name,
+            date_format(edel.recover_time, '%Y-%m-%d %H:%i:%s') as recover_time            
+        FROM ecrm_customer_info eci
+        JOIN ecrm_device_info edi
+            ON eci.client_code = edi.client_code 
+            AND eci.contract_code = edi.contract_code
+        JOIN ecrm_device_event_logs edel
+            ON edi.com_id = edel.com_id 
+            AND edi.device_id = edel.device_id
+            AND edi.device_type = edel.device_type
+    </sql>
+
+    <select id="getFaultListExcel" resultType="map">
+        <include refid="commonFaultExcelData" />
+        <include refid="commonWhere" />
+    </select>
+
+    <select id="getFaultRecoveryInfo" resultType="map">
+        SELECT 
+            edal.event_id,
+            edal.recover_person,
+            edal.recover_date,
+            edal.fault_reason,
+            edal.fault_result,
+            edal.fault_recover_yn,
+            edal.non_recover_reason
+        FROM ecrm_event_action_logs edal
+        WHERE edal.event_id = #{event_id}
+    </select>
+
+    <insert id="saveFaultAction" parameterType="map">
+        INSERT INTO ecrm_event_action_logs (
+            event_id, 
+            recover_person, 
+            recover_date, 
+            fault_reason, 
+            fault_result, 
+            fault_recover_yn, 
+            non_recover_reason
+        ) VALUES (
+            #{event_id}, 
+            #{recover_person}, 
+            #{recover_date}, 
+            #{fault_reason}, 
+            #{fault_result}, 
+            #{fault_recover_yn}, 
+            #{non_recover_reason}
+        )
+    </insert>
+
+    <update id="updateFaultAction" parameterType="map">
+        UPDATE ecrm_event_action_logs
+        SET 
+            recover_person = #{recover_person}, 
+            recover_date = #{recover_date}, 
+            fault_reason = #{fault_reason}, 
+            fault_result = #{fault_result}, 
+            fault_recover_yn = #{fault_recover_yn}, 
+            non_recover_reason = #{non_recover_reason}
+        WHERE event_id = #{event_id}
+    </update>
+</mapper>

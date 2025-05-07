@@ -1,0 +1,51 @@
+<!-- logback-spring.xml -->
+<configuration>
+    <!-- 콘솔에 로그 출력 -->
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>
+                %d{yyyy-MM-dd HH:mm:ss} - %highlight(%-5level) - %cyan(%logger{36}) - %msg%n
+            </pattern>
+        </encoder>
+    </appender>
+
+     <!-- 로컬 환경 -->
+    <springProfile name="local">
+        <property name="LOG_PATH" value="/Users/commylife/myproject/java/workspace/safety/logs/"/>
+    </springProfile>
+
+    <!-- 개발 환경 -->
+    <springProfile name="dev">
+        <property name="LOG_PATH" value="/usr/local/tomcat/logs/"/>
+    </springProfile>
+
+    <!-- 운영 환경 -->
+    <springProfile name="prod">
+        <property name="LOG_PATH" value="/usr/share/tomcat/logs"/>
+    </springProfile>
+
+    <appender name="LOG_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_PATH}/spring-application.log</file>
+
+        <!-- 날짜 기반 롤링 정책 설정 -->
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <!-- 로그 파일 이름 패턴: 로그가 날짜별로 "spring-application-yyyy-MM-dd.log" 형식으로 저장됨 -->
+            <fileNamePattern>${LOG_PATH}/spring-application-%d{yyyy-MM-dd}.log</fileNamePattern>
+
+            <!-- 로그 파일 보관 기간 설정 (예: 최근 30일간 로그만 보관) -->
+            <maxHistory>30</maxHistory>
+        </rollingPolicy>
+        
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} - %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- 로그 레벨 설정 -->
+    <root level="INFO">
+        <appender-ref ref="STDOUT" />
+        <appender-ref ref="LOG_FILE" />
+    </root>
+
+    <logger name="com.ktss" level="DEBUG"/>
+</configuration>

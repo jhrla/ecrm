@@ -1,0 +1,65 @@
+plugins {
+    id 'base'
+    id 'org.springframework.boot' version '3.2.8' apply false
+    id 'io.spring.dependency-management' version '1.1.6' apply false
+}
+
+// 프로파일 설정
+ext {
+    profile = project.hasProperty('profile') ? project.property('profile') : 'dev'
+}
+
+subprojects {
+    repositories {
+        mavenCentral()
+    }
+}
+
+allprojects {
+    apply plugin: 'java'
+
+    // 빌드 디렉토리 설정
+    buildDir = file("$rootDir/build/${project.name}")
+
+    // 프로파일에 따른 리소스 필터링
+    processResources {
+        filesMatching('**/application.properties') {
+            filter { String line ->
+                line.replace('${profile}', project.findProperty('profile') ?: 'dev')
+            }
+        }
+    }
+}
+
+// 개발 환경 빌드
+task buildDev {
+    dependsOn ':app:buildDev'
+}
+
+// 운영 환경 빌드
+task buildProd {
+    group = 'build'
+    description = 'Builds production version'
+
+    dependsOn ':app:clean'
+    dependsOn ':app:buildProd'
+}
+
+// 전체 빌드 태스크
+task buildAll {
+    dependsOn buildDev
+}
+
+// clean 태스크 재정의
+tasks.named('clean') {
+    doFirst {
+        println "=== Cleaning build directories ==="
+        // root 프로젝트의 build 디렉토리 삭제
+        delete "$rootDir/build"
+    }
+
+    doLast {
+        println "=== Clean completed ==="
+    }
+}
+
