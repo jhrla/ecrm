@@ -43,4 +43,10 @@
                          WHERE u.authority_code = 1
                             OR (u.authority_code NOT IN (1, 3) AND u.id = #{contract_code}))
     </select>
+
+    <select id="getFcmPhone">
+        SELECT emergency_tel1,emergency_tel2,emergency_tel3
+        FROM subscribe_contract_service
+        WHERE #{contract_code}
+    </select>
 </mapper>

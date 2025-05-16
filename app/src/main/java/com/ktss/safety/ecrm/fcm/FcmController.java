@@ -42,4 +42,12 @@ public class FcmController {
         fcmService.sendPushNotification(paramMap);
         return "푸시 전송 완료";
     }
+
+    @PostMapping("/api/getFcmPhone")
+    public ResponseEntity<Map<String, Object>> getFcmPhone(@RequestBody Map<String, Object> paramMap) {
+        Map<String, Object> result = fcmService.getFcmPhone(paramMap);
+        return ResponseEntity.ok(result);
+    }
+
 }
+

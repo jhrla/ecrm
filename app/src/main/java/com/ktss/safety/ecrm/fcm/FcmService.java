@@ -22,6 +22,9 @@ public class FcmService {
     public Map<String, Object> getFcmUseYn(Map<String, Object> paramMap) {
         return fcmMapper.getFcmUseYn(paramMap);
     }
+    public Map<String, Object> getFcmPhone(Map<String, Object> paramMap) {
+        return fcmMapper.getFcmPhone(paramMap);
+    }
 
     public void sendPushNotification(Map<String, Object> paramMap) {
 

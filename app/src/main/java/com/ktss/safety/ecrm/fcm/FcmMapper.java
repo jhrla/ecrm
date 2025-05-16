@@ -13,5 +13,7 @@ public interface FcmMapper {
 
     List<Map<String, Object>> getFcmTokensByContractCode(String contract_code);
 
+    Map<String, Object> getFcmPhone(Map<String, Object> paramMap);
+
     Map<String, Object> getFcmUseYn(Map<String, Object> paramMap);
 }
